@@ -20,6 +20,89 @@
 
 </div>
 
+## API使用方法
+
+本项目提供基于FastAPI的HTTP REST API服务，用于非实时语音转换。
+
+### 启动API服务
+
+```bash
+python rvc_api.py --host 0.0.0.0 --port 8000 --device cuda --half
+```
+
+参数说明：
+- `--host`: 服务器主机地址 (默认: 0.0.0.0)
+- `--port`: 服务器端口 (默认: 8000)
+- `--device`: 计算设备: cuda, cuda:0, cpu (默认: 自动检测)
+- `--half`: 使用半精度推理 (FP16)
+- `--no-half`: 禁用半精度推理 (使用FP32)
+
+### API端点
+
+#### 1. 语音转换
+```bash
+POST /convert
+```
+
+参数（Query Parameters）：
+- `model_name`: 模型名称（必需）
+- `f0_up_key`: 音高调整（半音数，范围-24到24，默认0）
+- `f0_method`: 音高提取算法: rmvpe/crepe/harvest/pm（默认rmvpe）
+- `index_rate`: 特征检索比例（范围0.0到1.0，默认0.75）
+- `filter_radius`: 滤波半径（范围0到10，默认3）
+- `resample_sr`: 输出重采样率（默认0，不 resample）
+- `rms_mix_rate`: 音量包络混合率（范围0.0到1.0，默认0.25）
+- `protect`: 清辅音保护（范围0.0到0.5，默认0.33）
+
+请求体：multipart/form-data，包含音频文件（支持.wav, .mp3, .flac, .ogg, .m4a, .mp4, .wma）
+
+示例：
+```bash
+curl -X POST "http://localhost:8000/convert?model_name=TetoSV&f0_up_key=0" \
+  -F "input_file=@input.wav" \
+  --output output.wav
+```
+
+#### 2. 获取模型列表
+```bash
+GET /models
+```
+
+返回所有可用模型及其状态。
+
+#### 3. 获取已加载模型
+```bash
+GET /models/loaded
+```
+
+返回当前已加载到内存中的模型列表。
+
+#### 4. 卸载模型
+```bash
+POST /models/unload?model_name=模型名称
+```
+
+#### 5. 健康检查
+```bash
+GET /health
+```
+
+返回服务状态和设备信息。
+
+### 模型放置位置
+
+将模型文件夹放置在 `logs/` 目录下，例如：
+```
+logs/
+  └── TetoSV/
+      ├── TetoSV.pth
+      └── TetoSV.index
+```
+
+**注意**：`.index` 文件是**可选的**。如果没有index文件，API仍然可以工作，但不会使用特征检索（Retrieval）功能。有index文件时，转换效果通常会更好（音色一致性更高）。
+
+---
+
 > 底模使用接近50小时的开源高质量VCTK训练集训练，无版权方面的顾虑，请大家放心使用
 
 > 请期待RVCv3的底模，参数更大，数据更大，效果更好，基本持平的推理速度，需要训练数据量更少。

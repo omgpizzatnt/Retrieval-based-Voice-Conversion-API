@@ -97,7 +97,11 @@ class VC:
                 "",
                 "",
             )
-        person = f'{os.getenv("weight_root")}/{sid}'
+        weight_root = os.getenv("weight_root")
+        if weight_root:
+            person = os.path.join(weight_root, sid)
+        else:
+            person = sid
         logger.info(f"Loading: {person}")
 
         self.cpt = torch.load(person, map_location="cpu")

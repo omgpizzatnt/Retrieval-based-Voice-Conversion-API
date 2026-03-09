@@ -15,8 +15,10 @@ import logging
 from io import BytesIO
 from typing import Optional
 
-now_dir = os.getcwd()
-sys.path.append(now_dir)
+# 切换到脚本所在目录，确保模块导入正确
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+sys.path.insert(0, script_dir)
 
 from dotenv import load_dotenv
 from scipy.io import wavfile
@@ -24,10 +26,12 @@ from scipy.io import wavfile
 from configs.config import Config
 from infer.modules.vc.modules import VC
 
-from fastapi import FastAPI, UploadFile, HTTPException, Query
+from fastapi import FastAPI, UploadFile, HTTPException, Form
 from fastapi.responses import StreamingResponse
 import uvicorn
 
+# 禁用RVC的默认路径前缀
+os.environ["weight_root"] = ""
 load_dotenv()
 
 logging.basicConfig(
@@ -46,6 +50,8 @@ class ModelCache:
         if model_name not in self.models:
             logger.info(f"Loading model: {model_name}")
             vc = VC(self.config)
+            
+            # 检查各种可能的路径
             possible_paths = [
                 f"{model_name}.pth",
                 os.path.join("logs", model_name, f"{model_name}.pth"),
@@ -93,24 +99,27 @@ def create_app(config: Config, model_cache: ModelCache) -> FastAPI:
     @app.post("/convert")
     async def convert_voice(
         input_file: UploadFile,
-        model_name: str = Query(..., description="模型名称"),
-        f0_up_key: int = Query(0, ge=-24, le=24, description="音高调整（半音数）"),
-        f0_method: str = Query("rmvpe", description="音高提取算法: rmvpe/crepe/harvest/pm"),
-        index_rate: float = Query(0.75, ge=0.0, le=1.0, description="特征检索比例"),
-        filter_radius: int = Query(3, ge=0, le=10, description="滤波半径"),
-        resample_sr: int = Query(0, ge=0, description="输出重采样率"),
-        rms_mix_rate: float = Query(0.25, ge=0.0, le=1.0, description="音量包络混合率"),
-        protect: float = Query(0.33, ge=0.0, le=0.5, description="清辅音保护")
+        model_name: str = Form(..., description="模型名称"),
+        f0_up_key: int = Form(0, ge=-24, le=24, description="音高调整（半音数）"),
+        f0_method: str = Form("rmvpe", description="音高提取算法: rmvpe/crepe/harvest/pm"),
+        index_rate: float = Form(0.75, ge=0.0, le=1.0, description="特征检索比例"),
+        filter_radius: int = Form(3, ge=0, le=10, description="滤波半径"),
+        resample_sr: int = Form(0, ge=0, description="输出重采样率"),
+        rms_mix_rate: float = Form(0.25, ge=0.0, le=1.0, description="音量包络混合率"),
+        protect: float = Form(0.33, ge=0.0, le=0.5, description="清辅音保护")
     ):
         try:
-            if not input_file.filename.endswith('.wav'):
-                raise HTTPException(status_code=400, detail="只支持.wav格式")
+            # 支持的音频格式
+            supported_formats = ('.wav', '.mp3', '.flac', '.ogg', '.m4a', '.mp4', '.wma')
+            filename = input_file.filename or ''
+            if not filename.lower().endswith(supported_formats):
+                raise HTTPException(status_code=400, detail=f"不支持的格式，请使用: {', '.join(supported_formats)}")
             index_path = find_index_file(model_name)
             if not index_path:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"未找到模型 '{model_name}' 的index文件"
-                )
+                logger.warning(f"模型 '{model_name}' 未找到index文件，将不使用特征检索")
+                index_path = ""
+            else:
+                logger.info(f"使用index文件: {index_path}")
             logger.info(f"Converting: model={model_name}, f0={f0_method}, key={f0_up_key}")
             audio_bytes = await input_file.read()
             vc = model_cache.load_model(model_name)
@@ -128,10 +137,13 @@ def create_app(config: Config, model_cache: ModelCache) -> FastAPI:
                 rms_mix_rate=rms_mix_rate,
                 protect=protect
             )
+            if wav_opt[0] is None or wav_opt[1] is None:
+                raise HTTPException(status_code=500, detail="转换失败")
+
             output_buffer = BytesIO()
             wavfile.write(output_buffer, wav_opt[0], wav_opt[1])
             output_buffer.seek(0)
-            output_filename = f"converted_{input_file.filename}"
+            output_filename = f"converted_{filename}.wav"
             return StreamingResponse(
                 output_buffer,
                 media_type="audio/wav",
