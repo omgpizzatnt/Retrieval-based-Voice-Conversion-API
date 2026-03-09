@@ -44,8 +44,10 @@ python rvc_api.py --host 0.0.0.0 --port 8000 --device cuda --half
 POST /convert
 ```
 
-参数（Query Parameters）：
-- `model_name`: 模型名称（必需）
+参数（Form Data）：
+- `model_name`: 模型名称（**必需**），用于缓存标识。即使指定了`model_path`，此参数也必须提供
+- `model_path`: 模型文件路径(.pth)（可选），不传则自动在`logs/{model_name}/`目录查找
+- `index_path`: index文件路径(.index)（可选），不传则自动查找；传空字符串`""`表示不使用index
 - `f0_up_key`: 音高调整（半音数，范围-24到24，默认0）
 - `f0_method`: 音高提取算法: rmvpe/crepe/harvest/pm（默认rmvpe）
 - `index_rate`: 特征检索比例（范围0.0到1.0，默认0.75）
@@ -56,9 +58,40 @@ POST /convert
 
 请求体：multipart/form-data，包含音频文件（支持.wav, .mp3, .flac, .ogg, .m4a, .mp4, .wma）
 
-示例：
+**示例1 - 自动查找模型（推荐）**：
 ```bash
-curl -X POST "http://localhost:8000/convert?model_name=TetoSV&f0_up_key=0" \
+curl -X POST "http://localhost:8000/convert" \
+  -F "model_name=TetoSV" \
+  -F "input_file=@input.wav" \
+  --output output.wav
+```
+*自动查找 `logs/TetoSV/TetoSV.pth` 和 `logs/TetoSV/*.index`*
+
+**示例2 - 手动指定模型路径（Linux/Mac）**：
+```bash
+curl -X POST "http://localhost:8000/convert" \
+  -F "model_name=my_model" \
+  -F "model_path=/path/to/custom/model.pth" \
+  -F "index_path=/path/to/custom/model.index" \
+  -F "input_file=@input.wav" \
+  --output output.wav
+```
+
+**示例3 - 手动指定模型路径（Windows）**：
+```bash
+curl -X POST "http://localhost:8000/convert" \
+  -F "model_name=ezhikgolos" \
+  -F "model_path=D:\AI_stuff\RVC1006Nvidia\assets\weights\ezhikgolos.pth" \
+  -F "index_path=D:\AI_stuff\RVC1006Nvidia\logs\added_IVF943_Flat_nprobe_1_ezhikgolos_v2.index" \
+  -F "input_file=@input.wav" \
+  --output output.wav
+```
+
+**示例4 - 不使用index文件**：
+```bash
+curl -X POST "http://localhost:8000/convert" \
+  -F "model_name=TetoSV" \
+  -F "index_path=" \
   -F "input_file=@input.wav" \
   --output output.wav
 ```
@@ -88,6 +121,13 @@ GET /health
 ```
 
 返回服务状态和设备信息。
+
+### 关于 model_name 参数
+
+`model_name` 是一个**缓存标识符**，用于区分不同的模型实例：
+- 当不提供 `model_path` 时，API 会在 `logs/{model_name}/` 目录下自动查找模型文件
+- 当提供 `model_path` 时，`model_name` 仅用于缓存键（可以是任意字符串）
+- 相同 `model_name` + `model_path` 组合的请求会复用已加载的模型
 
 ### 模型放置位置
 

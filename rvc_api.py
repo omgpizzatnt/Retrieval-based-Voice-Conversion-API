@@ -46,28 +46,33 @@ class ModelCache:
         self.models = {}
         self.config = config
 
-    def load_model(self, model_name: str):
-        if model_name not in self.models:
+    def load_model(self, model_name: str, model_path: str = None):
+        cache_key = f"{model_name}:{model_path}"
+        if cache_key not in self.models:
             logger.info(f"Loading model: {model_name}")
             vc = VC(self.config)
-            
-            # 检查各种可能的路径
-            possible_paths = [
-                f"{model_name}.pth",
-                os.path.join("logs", model_name, f"{model_name}.pth"),
-                os.path.join("logs", model_name, "model.pth"),
-            ]
-            model_path = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    model_path = path
-                    break
-            if not model_path:
-                raise FileNotFoundError(f"Model file not found for: {model_name}")
+
+            if model_path is None:
+                # 自动查找模型路径
+                possible_paths = [
+                    f"{model_name}.pth",
+                    os.path.join("logs", model_name, f"{model_name}.pth"),
+                    os.path.join("logs", model_name, "model.pth"),
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        model_path = path
+                        break
+                if not model_path:
+                    raise FileNotFoundError(f"Model file not found for: {model_name}")
+
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found: {model_path}")
+
             vc.get_vc(model_path)
-            self.models[model_name] = vc
-            logger.info(f"Model {model_name} loaded successfully")
-        return self.models[model_name]
+            self.models[cache_key] = vc
+            logger.info(f"Model {model_name} loaded successfully from {model_path}")
+        return self.models[cache_key]
 
     def unload_model(self, model_name: str):
         if model_name in self.models:
@@ -99,7 +104,9 @@ def create_app(config: Config, model_cache: ModelCache) -> FastAPI:
     @app.post("/convert")
     async def convert_voice(
         input_file: UploadFile,
-        model_name: str = Form(..., description="模型名称"),
+        model_name: str = Form(..., description="模型名称（用于缓存）"),
+        model_path: Optional[str] = Form(None, description="模型文件路径(.pth)，可选，不传则自动查找"),
+        index_path: Optional[str] = Form(None, description="index文件路径(.index)，可选，不传则自动查找"),
         f0_up_key: int = Form(0, ge=-24, le=24, description="音高调整（半音数）"),
         f0_method: str = Form("rmvpe", description="音高提取算法: rmvpe/crepe/harvest/pm"),
         index_rate: float = Form(0.75, ge=0.0, le=1.0, description="特征检索比例"),
@@ -109,20 +116,28 @@ def create_app(config: Config, model_cache: ModelCache) -> FastAPI:
         protect: float = Form(0.33, ge=0.0, le=0.5, description="清辅音保护")
     ):
         try:
-            # 支持的音频格式
             supported_formats = ('.wav', '.mp3', '.flac', '.ogg', '.m4a', '.mp4', '.wma')
             filename = input_file.filename or ''
             if not filename.lower().endswith(supported_formats):
                 raise HTTPException(status_code=400, detail=f"不支持的格式，请使用: {', '.join(supported_formats)}")
-            index_path = find_index_file(model_name)
-            if not index_path:
-                logger.warning(f"模型 '{model_name}' 未找到index文件，将不使用特征检索")
-                index_path = ""
+
+            if index_path is None:
+                index_path = find_index_file(model_name)
+                if not index_path:
+                    logger.warning(f"模型 '{model_name}' 未找到index文件，将不使用特征检索")
+                    index_path = ""
+                else:
+                    logger.info(f"自动使用index文件: {index_path}")
+            elif index_path == "":
+                logger.info("用户指定不使用index文件")
             else:
-                logger.info(f"使用index文件: {index_path}")
-            logger.info(f"Converting: model={model_name}, f0={f0_method}, key={f0_up_key}")
+                if not os.path.exists(index_path):
+                    raise HTTPException(status_code=400, detail=f"指定的index文件不存在: {index_path}")
+                logger.info(f"使用指定的index文件: {index_path}")
+
+            logger.info(f"Converting: model={model_name}, path={model_path or 'auto'}, f0={f0_method}, key={f0_up_key}")
             audio_bytes = await input_file.read()
-            vc = model_cache.load_model(model_name)
+            vc = model_cache.load_model(model_name, model_path)
             _, wav_opt = vc.vc_single(
                 sid=0,
                 input_audio_path=audio_bytes,
