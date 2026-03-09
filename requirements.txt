@@ -1,49 +1,46 @@
-aria2
-joblib>=1.1.0
-numba==0.56.4
-numpy==1.23.5
-scipy
-librosa==0.9.1
-llvmlite==0.39.0
-fairseq==0.12.2
-faiss-cpu==1.7.3
-gradio==3.34.0
-Cython
-pydub>=0.25.1
-soundfile>=0.12.1
+# RVC Inference API 依赖
+
+# 核心框架
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# FastAPI
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+pydantic>=2.5.0
+
+# 音频处理
+librosa>=0.9.0
+soundfile>=0.12.0
+scipy>=1.9.0
+pyworld>=0.3.0
+praat-parselmouth>=0.4.0
+pydub>=0.25.0
 ffmpeg-python>=0.2.0
-tensorboardX
-Jinja2>=3.1.2
-json5
-Markdown
-matplotlib>=3.7.0
-matplotlib-inline>=0.1.3
-praat-parselmouth>=0.4.2
-Pillow>=9.1.1
-resampy>=0.4.2
-scikit-learn
-tensorboard
-tqdm>=4.63.1
-tornado>=6.1
-Werkzeug>=2.2.3
-uc-micro-py>=1.0.1
-sympy>=1.11.1
-tabulate>=0.8.10
-PyYAML>=6.0
-pyasn1>=0.4.8
-pyasn1-modules>=0.2.8
-fsspec>=2022.11.0
-absl-py>=1.2.0
+resampy>=0.4.0
 audioread
-uvicorn>=0.21.1
-colorama>=0.4.5
-pyworld==0.3.2
-httpx
+
+# 深度学习辅助
+numpy>=1.23.0
+numba>=0.56.0
+faiss-cpu>=1.7.0
+fairseq>=0.12.0
+Cython
+
+# 音高提取
+torchcrepe>=0.0.20
+torchfcpe>=0.0.4
+
+# 其他工具
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+scikit-learn>=1.2.0
+PyYAML>=6.0
+Pillow>=9.1.0
+joblib>=1.1.0
+llvmlite>=0.39.0
+
+# 可选ONNX支持
 onnxruntime; sys_platform == 'darwin'
 onnxruntime-gpu; sys_platform != 'darwin'
-torchcrepe==0.0.20
-fastapi==0.88
-torchfcpe
-ffmpy==0.3.1
-python-dotenv>=1.0.0
-av
