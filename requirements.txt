@@ -44,3 +44,5 @@ llvmlite>=0.39.0
 # 可选ONNX支持
 onnxruntime; sys_platform == 'darwin'
 onnxruntime-gpu; sys_platform != 'darwin'
+
+av==15.1.0

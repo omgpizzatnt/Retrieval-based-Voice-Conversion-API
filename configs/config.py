@@ -57,10 +57,23 @@ class Config:
             self.noparallel,
             self.noautoopen,
             self.dml,
+            self.device_arg,
+            self.half_arg,
+            self.no_half_arg,
         ) = self.arg_parse()
         self.instead = ""
         self.preprocess_per = 3.7
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
+
+        # Apply command-line overrides for device and precision
+        if self.device_arg:
+            self.device = self.device_arg
+            self.instead = self.device_arg
+        if self.no_half_arg:
+            self.is_half = False
+            self.use_fp32_config()
+        elif self.half_arg:
+            self.is_half = True
 
     @staticmethod
     def load_config_json() -> dict:
@@ -93,6 +106,22 @@ class Config:
             action="store_true",
             help="torch_dml",
         )
+        parser.add_argument(
+            "--device",
+            type=str,
+            default=None,
+            help="Device to use for inference (cuda, cuda:0, cpu, etc.)",
+        )
+        parser.add_argument(
+            "--half",
+            action="store_true",
+            help="Use half precision (FP16) for inference",
+        )
+        parser.add_argument(
+            "--no-half",
+            action="store_true",
+            help="Disable half precision, use full precision (FP32)",
+        )
         cmd_opts = parser.parse_args()
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
@@ -104,6 +133,9 @@ class Config:
             cmd_opts.noparallel,
             cmd_opts.noautoopen,
             cmd_opts.dml,
+            cmd_opts.device,
+            cmd_opts.half,
+            cmd_opts.no_half,
         )
 
     # has_mps is only available in nightly pytorch (for now) and MasOS 12.3+.
